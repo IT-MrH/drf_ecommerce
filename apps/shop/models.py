@@ -68,7 +68,7 @@ class Product(IsDeletedModel):
 
 class Review(IsDeletedModel):
     """
-    pass
+     Represents a product listed for sale.
     """
 
     RATING_CHOICES = [(1, 1), (2, 2), (3, 3), (4, 4), (5, 5)]
