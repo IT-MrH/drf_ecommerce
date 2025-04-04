@@ -4,16 +4,14 @@ from rest_framework.views import APIView
 from rest_framework import status
 from apps.sellers.models import Seller
 from apps.shop.models import Category, Product, Review
-from apps.shop.filters import ProductFilter
+from apps.shop.filters import ProductFilter, ReviewFilter
 from apps.profiles.models import OrderItem, ShippingAddress, Order
-from apps.common.permissions import IsSeller, IsOwner
+from apps.common.permissions import IsSeller, IsOwnerOrReadOnly
 from apps.common.paginations import CustomPagination
-from apps.shop.schema_examples import PRODUCT_PARAM_EXAMPLE
+from apps.shop.schema_examples import PRODUCT_PARAM_EXAMPLE, REVIEW_PARAM_EXAMPLE
 from apps.shop.serializers import OrderItemSerializer, ToggleCartItemSerializer, CheckoutSerializer, \
     OrderSerializer, CategorySerializer, ProductSerializer, CreateReviewSerializer, ReviewSerializer
 from apps.common.utils import set_dict_attr
-
-
 
 tags = ["Shop"]
 
@@ -87,15 +85,15 @@ class ProductsView(APIView):
     )
     def get(self, request, *args, **kwargs):
         products = Product.objects.select_related("category", "seller", "seller__user").all()
-        filterset = ProductFilter(request.GET, queryset=products)
-        if filterset.is_valid():
-            queryset = filterset.qs
+        filter_set = ProductFilter(request.GET, queryset=products)
+        if filter_set.is_valid():
+            queryset = filter_set.qs
             paginator = self.pagination_class()
             paginated_queryset = paginator.paginate_queryset(queryset, request)
             serializer = self.serializer_class(paginated_queryset, many=True)
             return paginator.get_paginated_response(serializer.data)
         else:
-            return Response(filterset.errors, status=400)
+            return Response(filter_set.errors, status=400)
 
 
 class ProductsBySellerView(APIView):
@@ -253,6 +251,8 @@ class CheckoutView(APIView):
 
 class ReviewsView(APIView):
     serializer_class = CreateReviewSerializer
+    permission_classes = [IsOwnerOrReadOnly]
+    pagination_class = CustomPagination
 
     def get_object(self, slug):
         product = Product.objects.get_or_none(slug=slug)
@@ -266,14 +266,21 @@ class ReviewsView(APIView):
             """,
         tags=tags,
         responses=ReviewSerializer,
+        parameters=REVIEW_PARAM_EXAMPLE
     )
     def get(self, request, *args, **kwargs):
         product = self.get_object(kwargs["slug"])
         if not product:
             return Response(data={"message": "No Product with that slug"}, status=404)
-        reviews = Review.objects.filter(product=product)
-        serializer = ReviewSerializer(reviews, many=True)
-        return Response(data=serializer.data, status=200)
+        reviews = product.review.all()
+        filter_set = ReviewFilter(request.query_params, queryset=reviews)
+        if filter_set.is_valid():
+            queryset = filter_set.qs
+            paginator = self.pagination_class()
+            paginated_queryset = paginator.paginate_queryset(queryset, request)
+            serializer = ReviewSerializer(paginated_queryset, many=True)
+            return Response(data=serializer.data, status=200)
+        return Response(filter_set.errors, status=400)
 
     @extend_schema(
         summary="Create Review",
@@ -289,7 +296,7 @@ class ReviewsView(APIView):
         user = request.user
         product = self.get_object(kwargs["slug"])
         if not product:
-            return Response(data={"message": "No Product with that slug"},status=404)
+            return Response(data={"message": "No Product with that slug"}, status=404)
         serializer = self.serializer_class(data=request.data, context={'product': product, 'user': user})
         serializer.is_valid(raise_exception=True)
         data = serializer.validated_data
@@ -299,7 +306,7 @@ class ReviewsView(APIView):
 
 
 class ReviewView(APIView):
-    permission_classes = [IsOwner]
+    permission_classes = [IsOwnerOrReadOnly]
     serializer_class = CreateReviewSerializer
 
     def get_object(self, review_id):
@@ -319,7 +326,6 @@ class ReviewView(APIView):
 
     )
     def put(self, request, *args, **kwargs):
-        user = request.user
         review = self.get_object(kwargs["id"])
         if not review:
             return Response(data={"message": "Review does not exist!"}, status=404)
@@ -334,7 +340,7 @@ class ReviewView(APIView):
         return Response(data=serializer.data, status=200)
 
     @extend_schema(
-        summary="Delete Shipping Address ID",
+        summary="Delete Review",
         description="""
                 This endpoint allows a user to delete review.
             """,

@@ -126,8 +126,6 @@ class ReviewSerializer(serializers.Serializer):
     product_name = serializers.CharField(source='product.name')
     product_id = serializers.UUIDField(source='product.id')
     user = ProfileSerializer()
-    rating = serializers.IntegerField(validators=[
-        one_to_five_rating
-    ])
+    rating = serializers.IntegerField()
     text = serializers.CharField()
-    create_review = serializers.CharField(source='product.created_at')
+    create_review = serializers.CharField(source='created_at')

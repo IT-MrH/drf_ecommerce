@@ -76,7 +76,7 @@ class Review(IsDeletedModel):
     user = models.ForeignKey(User, on_delete=models.CASCADE)
     product = models.ForeignKey(Product, on_delete=models.CASCADE, related_name="review")
     rating = models.IntegerField(choices=RATING_CHOICES)
-    text = models.TextField()
+    text = models.TextField(max_length=1100)
 
 
 
